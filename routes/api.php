@@ -2,6 +2,7 @@
 
 use App\Libraries\Xtract\Tweet;
 use App\Models\TweetMedia;
+use App\Models\TwitterUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,27 @@ use Illuminate\Support\Facades\Storage;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
+});
+
+Route::post('/scrape-likes', function (Request $request) {
+    $data = $request->json('data.user.result.timeline_v2.timeline.instructions.0.entries');
+    if (!$data) dd($request);
+
+    $tweets = [];
+
+    foreach ($data as &$entry) {
+        if ($entry['content']['__typename'] === 'TimelineTimelineItem') {
+            $t = new Tweet($entry['content']['itemContent']['tweet_results']['result']);
+            $tweets[] = [
+                'id' => $t->id,
+
+            ];
+        }
+    }
+
+    Storage::put('test-likes-cache/' . time() . '.json', json_encode($tweets), JSON_PRETTY_PRINT);
+
+    return 'ok';
 });
 
 Route::post('/scrape-bookmarks', function (Request $request) {
@@ -72,7 +94,7 @@ Route::post('/scrape-bookmarks', function (Request $request) {
     Log::debug('Parsed tweets');
 
     $saved = [
-        'users' => \App\Models\TwitterUser::query()->whereIn('id', $ids['users'])->get()->keyBy('id')->toArray(),
+        'users' => TwitterUser::query()->whereIn('id', $ids['users'])->get()->keyBy('id')->toArray(),
         'tweets' => \App\Models\Tweet::query()->whereIn('id', $ids['tweets'])->get()->keyBy('id')->toArray(),
         'media' => \App\Models\TweetMedia::query()->whereIn('id', $ids['media'])->get()->keyBy('id')->toArray(),
     ];
@@ -89,73 +111,130 @@ Route::post('/scrape-bookmarks', function (Request $request) {
     return 'ok';
 });
 
-Route::get('/dl_old', function () {
-    $media = TweetMedia::query()->where('downloaded', false)->get();
-    $users = \App\Models\TwitterUser::query()->where('downloaded', false)->get();
+Route::get('/dl_old', function (Request $request) {
+    $stats = [
+        'errors' => [
+            'media'   => 0,
+            'avatars' => 0,
+            'banners' => 0,
+            'total'   => null
+        ],
+        'downloads' => [
+            'media'   => 0,
+            'avatars' => 0,
+            'banners' => 0,
+            'total'   => null
+        ]
+    ];
+    $errors = [];
 
-    try {
-        $responses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use (&$media, &$users) {
-            // Add each image url and, if applicable, media url to the download queue
-            $media->map(function (TweetMedia $m) use (&$pool) {
-                // Don't add to download queue if we already have it
-                $path = 'ext' . parse_url($m->image_url, PHP_URL_PATH);
-                if ($m->image_url && !Storage::exists($path)) $pool->as($m->id . '_image')->get($m->image_url);
-                $path = 'ext' . parse_url($m->media_url, PHP_URL_PATH);
-                if ($m->media_url && !Storage::exists($path)) $pool->as($m->id . '_media')->get($m->media_url);
-            });
+    $p = fn (string $url, string $prefix = '') => $prefix . parse_url($url, PHP_URL_PATH);
 
-            $users->map(function (\App\Models\TwitterUser $u) use (&$pool) {
-                $path = 'banners' . parse_url($u->banner_url, PHP_URL_PATH);
-                if ($u->banner_url && !Storage::exists($path)) $pool->as('banner_' . $u->id)->get($u->banner_url);
+    $media = TweetMedia::query()->where('downloaded', false)->limit($request->integer('n', 50))->get();
+    $users = TwitterUser::query()->where('downloaded', false)->limit($request->integer('n', 50))->get();
 
-                if ($u->avatar_url) {
-                    $path = 'avatars' . parse_url($u->avatar_url, PHP_URL_PATH);
-                    if (!Storage::exists($path)) $pool->as('avatar_' . $u->id . '_x96')
-                        ->get(str_replace('normal', 'x96', $u->avatar_url));
-                    if (!Storage::exists($path)) $pool->as('avatar_' . $u->id . '_400x400')
-                        ->get(str_replace('normal', '400x400', $u->avatar_url));
-                }
-            });
+    $responses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use (&$media, &$users, $p) {
+        // Add each image url and, if applicable, media url to the download queue
+        $media->map(function (TweetMedia $m) use ($p, &$pool) {
+            // Don't add to download queue if we already have it
+            if ($m->image_url)
+                $pool->as($m->id . '_image')->get($m->image_url);
+
+            if ($m->media_url)
+                $pool->as($m->id . '_media')->get($m->media_url);
         });
-    } catch (Exception $e) {
-        dd($e);
-    }
+
+        $users->map(function (TwitterUser $u) use (&$pool, $p) {
+            if ($u->banner_url) {
+                $pool->as('banner_' . $u->id)->get($u->banner_url);
+            }
+
+            if ($u->avatar_url) {
+                $x96 = str_replace('normal', 'x96', $u->avatar_url);
+                $x400 = str_replace('normal', '400x400', $u->avatar_url);
+
+                $pool->as('avatar_' . $u->id . '_x96')->get($x96);
+                $pool->as('avatar_' . $u->id . '_400x400')->get($x400);
+            }
+        });
+    });
 
     //dd($responses, $media, $users);
 
-    $media->map(function (TweetMedia $m) use (&$responses) {
-        $path = 'ext' . parse_url($m->image_url, PHP_URL_PATH);
-        Storage::put($path, $responses[$m->id . '_image']->body(), 'public');
-        $m->image_url = $path;
+    $media->map(function (TweetMedia $m) use (&$stats, &$responses, &$errors) {
+        try {
+            $path = 'ext' . parse_url($m->image_url, PHP_URL_PATH);
+            Storage::put($path, $responses[$m->id . '_image']->body(), 'public');
+            $m->image_url = $path;
 
-        if ($m->media_url) {
-            $path = 'ext' . parse_url($m->media_url, PHP_URL_PATH);
-            Storage::put($path, $responses[$m->id . '_media']->body(), 'public');
-            $m->media_url = $path;
+            if ($m->media_url) {
+                $path = 'ext' . parse_url($m->media_url, PHP_URL_PATH);
+                Storage::put($path, $responses[$m->id . '_media']->body(), 'public');
+                $m->media_url = $path;
+            }
+
+            $m->downloaded = true;
+            $m->save();
+            $stats['downloads']['media']++;
+        } catch (Exception $e) {
+            $errors[] = $e;
+            $stats['errors']['media']++;
         }
-
-        $m->downloaded = true;
-        $m->save();
     });
 
-    $users->map(function (\App\Models\TwitterUser $u) use (&$responses) {
-        if ($u->banner_url) {
-            $path = 'banners' . parse_url($u->banner_url, PHP_URL_PATH);
-            if (!Storage::exists($path)) Storage::put($path, $responses['banner_' . $u->id]->body(), 'public');
-            $this->banner_url = $path;
+    $users->map(function (TwitterUser $u) use (&$errors, &$stats, &$responses) {
+        $clean = true;
+
+        try {
+            if ($u->banner_url) {
+                //if ($responses['banner_' . $u->id] instanceof \GuzzleHttp\Exception\ConnectException)
+
+                $path = 'banners' . parse_url($u->banner_url, PHP_URL_PATH);
+                Storage::put($path, $responses['banner_' . $u->id]->body(), 'public');
+                $u->banner_url = $path;
+            }
+            $stats['downloads']['banners']++;
+        } catch (Exception $e) {
+            $errors[] = $e;
+            $stats['errors']['banners']++;
+            $clean = false;
         }
 
-        if ($u->avatar_url) {
-            $path = 'avatars' . parse_url(str_replace('normal', 'x96', $u->avatar_url), PHP_URL_PATH);
-            if (!Storage::exists($path)) Storage::put($path, $responses['avatar_' . $u->id . '_x96']->body(), 'public');
-            $path = str_replace('x96', '400x400', $path);
-            if (!Storage::exists($path)) Storage::put($path, $responses['avatar_' . $u->id . '_400x400']->body(), 'public');
+        try {
+            if ($u->avatar_url) {
+                $path = 'avatars' . parse_url(str_replace('normal', 'x96', $u->avatar_url), PHP_URL_PATH);
+                Storage::put($path, $responses['avatar_' . $u->id . '_x96']->body(), 'public');
+                $path = str_replace('x96', '400x400', $path);
+                Storage::put($path, $responses['avatar_' . $u->id . '_400x400']->body(), 'public');
 
-            $this->avatar_url = 'avatars' . parse_url($u->avatar_url, PHP_URL_PATH);
+                $u->avatar_url = 'avatars' . parse_url($u->avatar_url, PHP_URL_PATH);
+            }
+            $stats['downloads']['avatars']++;
+        } catch (Exception $e) {
+            $errors[] = $e;
+            $stats['errors']['avatars']++;
+            $clean = false;
         }
 
-        $u->downloaded = true;
+        if ($clean) $u->downloaded = true;
         $u->save();
+    });
+
+    dd([
+        'stats' => $stats,
+        'errors' => $errors
+    ], $responses, $media, $users);
+});
+
+Route::get('cluster-media', function () {
+    $tweets = \App\Models\Tweet::query()->with(['media'])->get();
+
+    $tweets->map(function (\App\Models\Tweet $t) {
+        foreach ($t->media as $m) {
+            $m->timestamps = false;
+            $m->updated_at = $t->updated_at;
+            $m->save();
+        }
     });
 
     return 'ok';

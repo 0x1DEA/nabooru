@@ -14,24 +14,28 @@ return new class extends Migration
         Schema::create('tweets', function (Blueprint $table) {
             $table->id()->comment('Tweet ID');
 
-            $table->foreignId('author_id');
+            $table->foreignId('author_id')->nullable();
 
             $table->string('conversation_id')->nullable();
 
             $table->string('device')->nullable();
 
-            $table->unsignedBigInteger('likes_count');
-            $table->unsignedBigInteger('replies_count');
-            $table->unsignedBigInteger('retweets_count');
-            $table->unsignedBigInteger('quotes_count');
+            $table->unsignedBigInteger('likes_count')->nullable();
+            $table->unsignedBigInteger('replies_count')->nullable();
+            $table->unsignedBigInteger('retweets_count')->nullable();
+            $table->unsignedBigInteger('quotes_count')->nullable();
             $table->unsignedBigInteger('views_count')->nullable();
-            $table->unsignedBigInteger('bookmarks_count');
+            $table->unsignedBigInteger('bookmarks_count')->nullable();
 
             $table->foreignId('quote_id')->nullable();
 
-            $table->text('text');
+            $table->text('data')->nullable();
+            $table->text('text')->nullable();
 
-            $table->text('mentions');
+            $table->text('mentions')->nullable();
+
+            $table->boolean('tombstone');
+            $table->boolean('stub');
 
             $table->timestamps();
         });

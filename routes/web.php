@@ -17,11 +17,14 @@ use Inertia\Inertia;
 |
 */
 
+Route::inertia('/gddp', 'GDDP');
+
 Route::get('/', function () {
     return Inertia::render('Home', [
         'stats' => [
             'tweets' => \App\Models\Tweet::query()->count(),
-            'media' => TweetMedia::query()->count(),
+            'queue' => TweetMedia::query()->where('downloaded', '=', false)->count(),
+            'media' => TweetMedia::query()->where('downloaded', '=', true)->count(),
             'accounts' => \App\Models\TwitterUser::query()->count()
         ],
         'galleries' => \App\Models\Gallery::all()
@@ -41,6 +44,7 @@ Route::get('/tweets', function () {
         'tweets' => \App\Models\Tweet::query()
             ->orderBy('updated_at', 'DESC')
             ->has('media', '=', 0)
+            //->where('text', 'LIKE', '%pheromones%')
             ->with(['author', 'media', 'quote', 'quote.author', 'quote.media'])
             ->paginate(48)
     ]);
@@ -61,11 +65,16 @@ Route::get('/users', function () {
 });
 
 Route::get('/gallery', function () {
+    $query = TweetMedia::query()->where('downloaded', '=', true);
+
+    if (!true) {
+        $query->where('type', '=', 'video');
+    }
+
     return Inertia::render('Gallery', [
-        'gallery' => TweetMedia::query()
-            ->with(['tweet', 'tweet.author'])
-            ->where('downloaded', '=', true)
+        'gallery' => $query->with(['tweet', 'tweet.author'])
             ->orderBy('updated_at', 'DESC')
+            ->orderBy('tweet_id', 'DESC')
             ->paginate(60),
         'galleries' => \App\Models\Gallery::all(),
         'open' => \request()->integer('open', 0)
@@ -100,14 +109,14 @@ Route::get('/gallery/{gallery:id}', function (\App\Models\Gallery $gallery) {
 
 $twurl = '(https?:\/\/.*(?:twitter|x)\.com\/)?(?<username>.*?)\/status\/(?<id>\d*)\??';
 
-Route::get('{tweet}', function (\Illuminate\Http\Request $request) use ($twurl) {
-    $m = [];
-    preg_match_all('/'.$twurl.'/mi', $request->path(), $m);
-
-    return Inertia::render('Tweet', [
-        'tweet' => Proto::tweet($m['id'][0])->save()->load(['author', 'media'])
-    ]);
-})->where('tweet', $twurl);
+//Route::get('{tweet}', function (\Illuminate\Http\Request $request) use ($twurl) {
+//    $m = [];
+//    preg_match_all('/'.$twurl.'/mi', $request->path(), $m);
+//
+//    return Inertia::render('Tweet', [
+//        'tweet' => Proto::tweet($m['id'][0])->save()->load(['author', 'media'])
+//    ]);
+//})->where('tweet', $twurl);
 
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');

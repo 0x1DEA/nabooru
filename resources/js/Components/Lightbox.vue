@@ -188,6 +188,7 @@ const markSensitive = () => {
         </div>
         <div class="py-4 px-8 w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl">
             <p class="px-2 py-1 rounded bg-neutral-950 border border-neutral-700">{{ m.tweet.text }}<a :href="`https://twitter.com/i/status/${m.tweet.id}`" class="px-2 underline" target="_blank">Original Tweet</a></p>
+            <p>{{ m.tweet.updated_at }}</p>
         </div>
         <div v-show="showThumbnails" class="relative z-10 flex space-x-2 w-screen overflow-x-auto h-32">
             <div v-for="(media, key) in gallery.data" @click="index = key" class="relative cursor-pointer w-24 overflow-hidden shrink-0">

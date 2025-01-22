@@ -92,6 +92,7 @@ class Tweet {
     public function save(array &$cache): \App\Models\Tweet|array
     {
         if (array_key_exists($this->id, $cache['tweets'])) {
+            // we already saved this tweet
             return $cache['tweets'][$this->id];
         } else {
             if (!array_key_exists($this->author->id, $cache['users'])) {
