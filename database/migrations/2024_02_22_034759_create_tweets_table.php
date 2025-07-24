@@ -34,8 +34,8 @@ return new class extends Migration
 
             $table->text('mentions')->nullable();
 
-            $table->boolean('tombstone');
-            $table->boolean('stub');
+            $table->boolean('tombstone')->default(false);
+            $table->boolean('stub')->default(false);
 
             $table->timestamps();
         });

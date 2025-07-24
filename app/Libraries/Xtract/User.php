@@ -31,12 +31,12 @@ class User {
 
         $d = $data['legacy'];
 
-        $this->name = $d['name'];
-        $this->username = $d['screen_name'];
+        $this->name = $data['core']['name'];
+        $this->username = $data['core']['screen_name'];
         if (array_key_exists('description', $d)) $this->bio = $d['description'];
         if (array_key_exists('location', $d)) $this->location = $d['location'];
 
-        $this->created_at = $d['created_at'];
+        $this->created_at = $data['core']['created_at'];
 
         $this->likes_count = $d['favourites_count'];
         $this->tweets_count = $d['statuses_count'];

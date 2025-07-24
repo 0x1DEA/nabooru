@@ -22,6 +22,7 @@ class Tweet {
     public string $device;
 
     public ?Tweet $quote = null;
+    public ?string $quote_id = null;
     public string $created_at;
     public array $mentions = [];
     public array $urls = [];
@@ -39,8 +40,7 @@ class Tweet {
             $ts = microtime(true);
             $data = $data['tweet'];
             \Log::debug('- - ##### data copy ' . (microtime(true) - $ts) * 1_000_000 . 'us');
-        }
-        else {
+        } else {
             if ($data['__typename'] !== 'Tweet') throw new \Error('Unrecognized type: ' . $data['__typename']);
         }
 
@@ -54,7 +54,10 @@ class Tweet {
         // Does not do nested qrts
         $ts = microtime(true);
         if ($data['legacy']['is_quote_status'] && array_key_exists('quoted_status_result', $data)) {
-            $this->quote = new Tweet($data['quoted_status_result']['result']);
+            $this->quote_id = $data['legacy']['quoted_status_id_str'];
+            if (!empty($data['quoted_status_result']['result'])) {
+                if ($data['quoted_status_result']['result']['__typename'] === 'Tweet') $this->quote = new Tweet($data['quoted_status_result']['result']);
+            }
         }
         \Log::debug('- - ##### QRT copy ' . (microtime(true) - $ts) * 1_000_000 . 'us');
 
@@ -137,8 +140,8 @@ class Tweet {
             $tweet->bookmarks_count = $this->bookmarks_count;
 
             if ($this->quote) {
-                $this->quote->save($cache);
-                $tweet->quote_id = $this->quote->id;
+                if ($this->quote instanceof Tweet) $this->quote->save($cache);
+                $tweet->quote_id = $this->quote_id;
             }
 
             $tweet->mentions = json_encode($this->mentions);

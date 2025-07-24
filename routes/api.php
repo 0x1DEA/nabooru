@@ -24,22 +24,67 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::post('/scrape-likes', function (Request $request) {
-    $data = $request->json('data.user.result.timeline_v2.timeline.instructions.0.entries');
+    Log::debug('-----~=[ starting request ]=~-----');
+
+    // Save the server response raw if we ever wanna do more with it retroactively
+    Storage::put('server/' . time() . '.json', json_encode(json_decode($request->getContent()), JSON_PRETTY_PRINT));
+    Log::debug('Stored server response');
+
+    // I wonder if there's a better way of "querying" data in json
+    $data = $request->json('data.user.result.timeline.timeline.instructions.0.entries');
+    // If we fucked up then fuck it
     if (!$data) dd($request);
+
+    Log::debug('Traversed JSON');
+
+    // get this ahead of time to reduce queries IDs only
+    $ids = [
+        'tweets' => [],
+        'users' => [],
+        'media' => [],
+    ];
 
     $tweets = [];
 
     foreach ($data as &$entry) {
         if ($entry['content']['__typename'] === 'TimelineTimelineItem') {
+            Log::debug('- Parsing tweet');
+            $ts = microtime(true);
             $t = new Tweet($entry['content']['itemContent']['tweet_results']['result']);
-            $tweets[] = [
-                'id' => $t->id,
+            Log::debug('- - instantiated tweet obj');
 
-            ];
+            $ids['tweets'][] = $t->id;
+            $ids['users'][] = $t->author->id;
+            foreach ($t->media as $m) $ids['media'][] = $m->id;
+
+            if ($t->quote) {
+                $ids['tweets'][] = $t->quote->id;
+                $ids['users'][] = $t->quote->author->id;
+                foreach ($t->quote->media as $m) $ids['media'][] = $m->id;
+            }
+
+            $tweets[] = $t;
+
+            Log::debug('- - Parsed tweet in ### ' . microtime(true) - $ts . 's');
         }
     }
 
-    Storage::put('test-likes-cache/' . time() . '.json', json_encode($tweets), JSON_PRETTY_PRINT);
+    Log::debug('Parsed tweets');
+
+    $saved = [
+        'users' => TwitterUser::query()->whereIn('id', $ids['users'])->get()->keyBy('id')->toArray(),
+        'tweets' => \App\Models\Tweet::query()->whereIn('id', $ids['tweets'])->get()->keyBy('id')->toArray(),
+        'media' => \App\Models\TweetMedia::query()->whereIn('id', $ids['media'])->get()->keyBy('id')->toArray(),
+    ];
+
+    Log::debug('Fetched cache');
+
+    foreach ($tweets as &$t) {
+        $t->save($saved);
+        Log::debug('Saved tweet ' . $t->id);
+    }
+
+    Log::debug('------~=[ ending request ]=~------');
 
     return 'ok';
 });
