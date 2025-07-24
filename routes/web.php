@@ -52,7 +52,8 @@ Route::get('/tweets', function () {
 
 Route::get('/tweet/{tweet:id}', function (\App\Models\Tweet $tweet) {
     return Inertia::render('Tweet', [
-        'tweet' => $tweet->load(['author', 'media', 'quote', 'quote.author', 'quote.media'])
+        'tweet' => $tweet->load(['author', 'media', 'quote', 'quote.author', 'quote.media']),
+        'quotes' => \App\Models\Tweet::query()->where('quote_id', $tweet->id)->with(['author', 'media'])->get()
     ]);
 });
 
@@ -64,22 +65,12 @@ Route::get('/users', function () {
     ]);
 });
 
-Route::get('/gallery', function () {
-    $query = TweetMedia::query()->where('downloaded', '=', true);
-
-    if (!true) {
-        $query->where('type', '=', 'video');
-    }
-
-    return Inertia::render('Gallery', [
-        'gallery' => $query->with(['tweet', 'tweet.author'])
-            ->orderBy('updated_at', 'DESC')
-            ->orderBy('tweet_id', 'DESC')
-            ->paginate(60),
-        'galleries' => \App\Models\Gallery::all(),
-        'open' => \request()->integer('open', 0)
-    ]);
-});
+Route::get('/gallery', [\App\Http\Controllers\GalleryController::class, 'all'])->name('gallery');
+Route::get('/galleries', [\App\Http\Controllers\GalleryController::class, 'index'])->name('galleries.index');
+Route::get('/gallery/new', [\App\Http\Controllers\GalleryController::class, 'create'])->name('galleries.create');
+Route::post('/gallery/new', [\App\Http\Controllers\GalleryController::class, 'store'])->name('galleries.store');
+Route::get('/gallery/{gallery:id}', [\App\Http\Controllers\GalleryController::class, 'show'])->name('galleries.show');
+Route::delete('/gallery/{gallery:id}', [\App\Http\Controllers\GalleryController::class, 'destroy']);
 
 Route::post('/gallery-item/move', function (\Illuminate\Http\Request $request) {
     $request->validate([
@@ -97,14 +88,12 @@ Route::post('/gallery-item/new', function (\Illuminate\Http\Request $request) {
     \App\Models\Gallery::query()->latest()->first()->media()->attach($request->integer('media_id'));
 });
 
-Route::get('/gallery/{gallery:id}', function (\App\Models\Gallery $gallery) {
-    return Inertia::render('Gallery', [
-        'gallery' => $gallery->media()
-
-            ->with(['tweet', 'tweet.author'])
-            ->orderBy('updated_at', 'DESC')
-            ->paginate(48)
+Route::delete('/gallery-item/delete', function (\Illuminate\Http\Request $request) {
+    $request->validate([
+        'media_id' => ['required', 'exists:'. TweetMedia::class.',id']
     ]);
+
+    \App\Models\Gallery::query()->latest()->first()->media()->detach($request->integer('media_id'));
 });
 
 $twurl = '(https?:\/\/.*(?:twitter|x)\.com\/)?(?<username>.*?)\/status\/(?<id>\d*)\??';

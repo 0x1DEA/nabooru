@@ -135,10 +135,12 @@ class Tweet {
             $tweet->quotes_count = $this->quotes_count;
             $tweet->views_count = $this->views_count;
             $tweet->bookmarks_count = $this->bookmarks_count;
+
             if ($this->quote) {
                 $this->quote->save($cache);
                 $tweet->quote_id = $this->quote->id;
             }
+
             $tweet->mentions = json_encode($this->mentions);
             $tweet->text = $this->text;
             $tweet->save();

@@ -19,4 +19,9 @@ class TweetMedia extends Model
     {
         return $this->belongsTo(Tweet::class);
     }
+
+    public function galleries(): BelongsToMany
+    {
+        return $this->belongsToMany(Gallery::class, 'gallery_media', 'media_id')->withPivot(['id', 'rank']);
+    }
 }

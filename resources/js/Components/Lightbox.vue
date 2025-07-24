@@ -1,6 +1,7 @@
 <script setup>
 import {computed, nextTick, onMounted, ref, watch} from "vue";
 import {onKeyStroke} from "@vueuse/core";
+import {Link} from "@inertiajs/vue3";
 import {router, useForm} from "@inertiajs/vue3";
 import Dropdown from "@/Components/Dropdown.vue";
 
@@ -54,11 +55,13 @@ onKeyStroke('Escape', (e) => {
 
 const showThumbnails = ref(true);
 const addToGalleryForm = useForm({
-    media_id: null
+    media_id: null,
+    gallery_id: null,
 })
 
-const addToGallery = () => {
+const addToGallery = (id) => {
     addToGalleryForm.media_id = props.gallery.data[index.value].id;
+    addToGalleryForm.media_id = id;
 
     addToGalleryForm.post('/gallery-item/new', {
         onSuccess: () => {
@@ -78,6 +81,15 @@ const m = computed(() => {
     if (media) setSource(media.media_url)
 
     return media;
+})
+
+const inGalleries = computed(() => {
+    let galleries = [];
+    if (!m.value) return galleries;
+    for (let g in m.value) {
+        galleries.push(g.id);
+    }
+    return galleries;
 })
 
 onMounted(() => {
@@ -159,11 +171,11 @@ const markSensitive = () => {
                     </template>
                     <template #content>
                         <div @click.stop class="flex flex-col space-y-2 p-2">
-                            <label class="flex items-center space-x-1" v-for="g in galleries">
+                            <label class="flex items-center space-x-1" v-for="g in galleries" @click="addToGallery(g.id)">
                                 <input type="checkbox" class="rounded bg-neutral-950"/>
                                 <span>{{ g.name }}</span>
+                                <span>{{ inGalleries.includes(g.id) }}</span>
                             </label>
-                            <span @click="addToGallery"></span>
                         </div>
                     </template>
                 </Dropdown>
@@ -187,7 +199,7 @@ const markSensitive = () => {
             </div>
         </div>
         <div class="py-4 px-8 w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl">
-            <p class="px-2 py-1 rounded bg-neutral-950 border border-neutral-700">{{ m.tweet.text }}<a :href="`https://twitter.com/i/status/${m.tweet.id}`" class="px-2 underline" target="_blank">Original Tweet</a></p>
+            <p class="px-2 py-1 rounded bg-neutral-950 border border-neutral-700">{{ m.tweet.text }}<a :href="`https://twitter.com/i/status/${m.tweet.id}`" class="px-2 underline" target="_blank">Original Tweet</a> <Link :href="`/tweet/${m.tweet.id}`" class="px-2 underline">Page</Link></p>
             <p>{{ m.tweet.updated_at }}</p>
         </div>
         <div v-show="showThumbnails" class="relative z-10 flex space-x-2 w-screen overflow-x-auto h-32">

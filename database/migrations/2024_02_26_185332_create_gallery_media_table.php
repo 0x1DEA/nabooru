@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('gallery_media', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id');
+            $table->foreignId('user_id')->nullable();
             $table->string('rank')->nullable();
             $table->foreignId('media_id');
             $table->foreignId('gallery_id');

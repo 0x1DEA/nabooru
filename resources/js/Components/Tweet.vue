@@ -1,5 +1,6 @@
 <script setup>
 import {useDateFormat} from "@vueuse/core";
+import {Link} from "@inertiajs/vue3";
 import Stat from "@/Components/Stat.vue";
 
 const props = defineProps({
@@ -74,7 +75,10 @@ const props = defineProps({
                     </svg>
                 </Stat>
             </div>
-            <a :href="'https://twitter.com/i/status/' + tweet.id" class="text-xs font-mono underline text-neutral-600">{{ tweet.id }}</a>
+            <div class="flex space-x-2">
+                <a :href="'https://twitter.com/i/status/' + tweet.id" class="text-xs font-mono underline text-neutral-600">{{ tweet.id }}</a>
+                <Link :href="'/tweet/' + tweet.id" class="text-xs font-mono underline text-neutral-600">Page</Link>
+            </div>
         </div>
     </div>
 </template>
