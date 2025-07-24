@@ -28,20 +28,16 @@ Route::post('/scrape-likes', function (Request $request) {
 
     $data = null;
     if ($request->has('file')) {
-        $file = 'server/' . $request->string('') . '.json';
+        $file = 'server/' . $request->string('file') . '.json';
         if (!Storage::exists($file)) return 'bad snapshot';
-        $data = json_decode(Storage::get($file), true);
+        $data = json_decode(Storage::get($file), true)['data']['user']['result']['timeline']['timeline']['instructions'][0]['entries'];
     } else {
         // I wonder if there's a better way of "querying" data in json
         $data = $request->json('data.user.result.timeline.timeline.instructions.0.entries');
 
-        if (count($data) > 2) {
-            // Save the server response raw if we ever wanna do more with it retroactively
-            Storage::put('server/' . time() . '.json', json_encode(json_decode($request->getContent()), JSON_PRETTY_PRINT));
-            Log::debug('Stored server response');
-        } else {
-            return 'ok';
-        }
+        // Save the server response raw if we ever wanna do more with it retroactively
+        Storage::put('server/' . time() . '.json', json_encode(json_decode($request->getContent()), JSON_PRETTY_PRINT));
+        Log::debug('Stored server response');
     }
 
     // If we fucked up then fuck it
