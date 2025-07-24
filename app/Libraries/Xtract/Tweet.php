@@ -98,7 +98,14 @@ class Tweet {
             // we already saved this tweet
             return $cache['tweets'][$this->id];
         } else {
-            if (!array_key_exists($this->author->id, $cache['users'])) {
+            $author_exists = array_key_exists($this->author->id, $cache['users']);
+            if ($author_exists) {
+                if ($cache['users'][$this->author->id]->avatar_url === null) {
+                    $cache['users'][$this->author->id]->avatar_url = $this->author->avatar_url;
+                    $cache['users'][$this->author->id]->save();
+                    \Log::debug('[FIX] Replaced existing null avatar for ' . $this->author->username);
+                }
+            } else {
                 $author = new TwitterUser();
                 $author->id = $this->author->id;
 
