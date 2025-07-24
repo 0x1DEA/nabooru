@@ -46,7 +46,7 @@ class User {
         $this->listed_count = $d['listed_count'];
 
         if (array_key_exists('profile_banner_url', $d)) $this->banner_url = $d['profile_banner_url'];
-        if (array_key_exists('profile_image_url_https', $d)) $this->avatar_url = $data['avatar']['image_url'];
+        $this->avatar_url = $data['avatar']['image_url'];
 
         // Set true profile link
         if (array_key_exists('url', $d['entities'])) {

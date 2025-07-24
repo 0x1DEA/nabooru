@@ -67,23 +67,24 @@ class Media
         if (array_key_exists($this->id, $cache['media'])) {
             return $cache['media'][$this->id];
         } else {
-            $media = new TweetMedia();
-            $media->id = $this->id;
-            $media->tweet_id = $this->tweet->id;
-            $media->media_key = $this->media_key;
-            $media->type = $this->type;
-            $media->mime = $this->mime;
-            $media->height = $this->height;
-            $media->width = $this->width;
-            $media->alt_text = $this->alt_text;
-            $media->duration = $this->duration;
-            $media->media_url = $this->media_url;
-            $media->image_url = $this->image_url;
-            $media->created_at = $this->tweet->created_at;
-            $media->save();
+            $media = TweetMedia::query()->updateOrCreate([
+                'id' => $this->id,
+            ], [
+                'tweet_id' => $this->tweet->id,
+                'media_key' => $this->media_key,
+                'type' => $this->type,
+                'mime' => $this->mime,
+                'height' => $this->height,
+                'width' => $this->width,
+                'alt_text' => $this->alt_text,
+                'duration' => $this->duration,
+                'media_url' => $this->media_url,
+                'image_url' => $this->image_url,
+                'created_at' => $this->tweet->created_at,
+            ]);
 
             // put into cache so it doesnt double save
-            $cache['media'][$media->id] = $media;
+            $cache['media'][$this->id] = $media;
 
             return $media;
         }

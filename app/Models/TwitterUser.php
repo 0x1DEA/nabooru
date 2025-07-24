@@ -9,6 +9,8 @@ class TwitterUser extends Model
 {
     use HasFactory;
 
+    protected $guarded = [];
+
     protected $casts = [
         'id' => 'string'
     ];

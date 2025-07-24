@@ -10,6 +10,8 @@ class TweetMedia extends Model
 {
     use HasFactory;
 
+    protected $guarded = [];
+
     protected $casts = [
         'id' => 'string',
         'nsfw' => 'boolean'

@@ -26,12 +26,24 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::post('/scrape-likes', function (Request $request) {
     Log::debug('-----~=[ starting request ]=~-----');
 
-    // Save the server response raw if we ever wanna do more with it retroactively
-    Storage::put('server/' . time() . '.json', json_encode(json_decode($request->getContent()), JSON_PRETTY_PRINT));
-    Log::debug('Stored server response');
+    $data = null;
+    if ($request->has('file')) {
+        $file = 'server/' . $request->string('') . '.json';
+        if (!Storage::exists($file)) return 'bad snapshot';
+        $data = json_decode(Storage::get($file), true);
+    } else {
+        // I wonder if there's a better way of "querying" data in json
+        $data = $request->json('data.user.result.timeline.timeline.instructions.0.entries');
 
-    // I wonder if there's a better way of "querying" data in json
-    $data = $request->json('data.user.result.timeline.timeline.instructions.0.entries');
+        if (count($data) > 2) {
+            // Save the server response raw if we ever wanna do more with it retroactively
+            Storage::put('server/' . time() . '.json', json_encode(json_decode($request->getContent()), JSON_PRETTY_PRINT));
+            Log::debug('Stored server response');
+        } else {
+            return 'ok';
+        }
+    }
+
     // If we fucked up then fuck it
     if (!$data) dd($request);
 
@@ -72,12 +84,21 @@ Route::post('/scrape-likes', function (Request $request) {
     Log::debug('Parsed tweets');
 
     $saved = [
-        'users' => TwitterUser::query()->whereIn('id', $ids['users'])->get()->keyBy('id')->toArray(),
-        'tweets' => \App\Models\Tweet::query()->whereIn('id', $ids['tweets'])->get()->keyBy('id')->toArray(),
-        'media' => \App\Models\TweetMedia::query()->whereIn('id', $ids['media'])->get()->keyBy('id')->toArray(),
+        'users' => [],
+        'tweets' => [],
+        'media' => [],
     ];
 
-    Log::debug('Fetched cache');
+    if (!$request->boolean('force')) {
+        $saved = [
+            'users' => TwitterUser::query()->whereIn('id', $ids['users'])->get()->keyBy('id')->toArray(),
+            'tweets' => \App\Models\Tweet::query()->whereIn('id', $ids['tweets'])->get()->keyBy('id')->toArray(),
+            'media' => \App\Models\TweetMedia::query()->whereIn('id', $ids['media'])->get()->keyBy('id')->toArray(),
+        ];
+        Log::debug('Fetched cache');
+    } else {
+        Log::debug('Forced bypass cache');
+    }
 
     foreach ($tweets as &$t) {
         $t->save($saved);
@@ -92,12 +113,19 @@ Route::post('/scrape-likes', function (Request $request) {
 Route::post('/scrape-bookmarks', function (Request $request) {
     Log::debug('-----~=[ starting request ]=~-----');
 
-    // Save the server response raw if we ever wanna do more with it retroactively
-    Storage::put('server/' . time() . '.json', json_encode(json_decode($request->getContent()), JSON_PRETTY_PRINT));
-    Log::debug('Stored server response');
+    $data = null;
+    if ($request->has('file')) {
+        $file = 'server/' . $request->string('file') . '.json';
+        if (!Storage::exists($file)) return 'bad snapshot';
+        $data = json_decode(Storage::get($file), true)['data']['bookmark_timeline_v2']['timeline']['instructions'][0]['entries'];
+    } else {
+        // I wonder if there's a better way of "querying" data in json
+        $data = $request->json('data.bookmark_timeline_v2.timeline.instructions.0.entries');
 
-    // I wonder if there's a better way of "querying" data in json
-    $data = $request->json('data.bookmark_timeline_v2.timeline.instructions.0.entries');
+        // Save the server response raw if we ever wanna do more with it retroactively
+        Storage::put('server/' . time() . '.json', json_encode(json_decode($request->getContent()), JSON_PRETTY_PRINT));
+        Log::debug('Stored server response');
+    }
     // If we fucked up then fuck it
     if (!$data) dd($request);
 
@@ -139,12 +167,21 @@ Route::post('/scrape-bookmarks', function (Request $request) {
     Log::debug('Parsed tweets');
 
     $saved = [
-        'users' => TwitterUser::query()->whereIn('id', $ids['users'])->get()->keyBy('id')->toArray(),
-        'tweets' => \App\Models\Tweet::query()->whereIn('id', $ids['tweets'])->get()->keyBy('id')->toArray(),
-        'media' => \App\Models\TweetMedia::query()->whereIn('id', $ids['media'])->get()->keyBy('id')->toArray(),
+        'users' => [],
+        'tweets' => [],
+        'media' => [],
     ];
 
-    Log::debug('Fetched cache');
+    if (!$request->boolean('force')) {
+        $saved = [
+            'users' => TwitterUser::query()->whereIn('id', $ids['users'])->get()->keyBy('id')->toArray(),
+            'tweets' => \App\Models\Tweet::query()->whereIn('id', $ids['tweets'])->get()->keyBy('id')->toArray(),
+            'media' => \App\Models\TweetMedia::query()->whereIn('id', $ids['media'])->get()->keyBy('id')->toArray(),
+        ];
+        Log::debug('Fetched cache');
+    } else {
+        Log::debug('Forced bypass cache');
+    }
 
     foreach ($tweets as &$t) {
         $t->save($saved);

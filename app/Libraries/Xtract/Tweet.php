@@ -98,65 +98,61 @@ class Tweet {
             // we already saved this tweet
             return $cache['tweets'][$this->id];
         } else {
-            $author_exists = array_key_exists($this->author->id, $cache['users']);
-            if ($author_exists) {
-                if ($cache['users'][$this->author->id]->avatar_url === null) {
-                    $cache['users'][$this->author->id]->avatar_url = $this->author->avatar_url;
-                    $cache['users'][$this->author->id]->save();
-                    \Log::debug('[FIX] Replaced existing null avatar for ' . $this->author->username);
-                }
-            } else {
-                $author = new TwitterUser();
-                $author->id = $this->author->id;
+            if (!array_key_exists($this->author->id, $cache['users'])) {
+                $author = TwitterUser::query()->updateOrCreate([
+                    'id' => $this->author->id
+                ], [
+                    'name' => $this->author->name,
+                    'username' => $this->author->username,
 
-                $author->name = $this->author->name;
-                $author->username = $this->author->username;
+                    'avatar_url' => $this->author->avatar_url,
+                    'banner_url' => $this->author->banner_url,
 
-                $author->avatar_url = $this->author->avatar_url;
-                $author->banner_url = $this->author->banner_url;
+                    'bio' => $this->author->bio,
+                    'location' => $this->author->location,
+                    'url' => $this->author->url,
 
-                $author->bio = $this->author->bio;
-                $author->location = $this->author->location;
-                $author->url = $this->author->url;
+                    'created_at' => $this->created_at,
 
-                $author->created_at = $this->created_at;
+                    'likes_count' => $this->author->likes_count,
+                    'tweets_count' => $this->author->tweets_count,
+                    'media_count' => $this->author->media_count,
+                    'followers_count' => $this->author->followers_count,
+                    'following_count' => $this->author->following_count,
+                    'listed_count' => $this->author->listed_count,
 
-                $author->likes_count = $this->author->likes_count;
-                $author->tweets_count = $this->author->tweets_count;
-                $author->media_count = $this->author->media_count;
-                $author->followers_count = $this->author->followers_count;
-                $author->following_count = $this->author->following_count;
-                $author->listed_count = $this->author->listed_count;
-                $author->save();
+                    'downloaded' => false
+                ]);
+
+                // FIXME: authors have had post created at instead of account!!
+                //$author->created_at = $this->created_at;
 
                 // add to the cache so that we dont double add
-                $cache['users'][$author->id] = $author;
+                $cache['users'][$this->author->id] = $author;
             }
 
-            $tweet = new \App\Models\Tweet();
-            $tweet->id = $this->id;
-            $tweet->author_id = $this->author->id;
-            $tweet->conversation_id = $this->conversationId;
-            $tweet->device = $this->device;
-            $tweet->created_at = $this->created_at;
-            $tweet->likes_count = $this->likes_count;
-            $tweet->replies_count = $this->replies_count;
-            $tweet->retweets_count = $this->retweets_count;
-            $tweet->quotes_count = $this->quotes_count;
-            $tweet->views_count = $this->views_count;
-            $tweet->bookmarks_count = $this->bookmarks_count;
+            $tweet = \App\Models\Tweet::query()->updateOrCreate([
+                'id' => $this->id,
+            ], [
+                'author_id' => $this->author->id,
+                'conversation_id' => $this->conversationId,
+                'device' => $this->device,
+                'created_at' => $this->created_at,
+                'likes_count' => $this->likes_count,
+                'replies_count' => $this->replies_count,
+                'retweets_count' => $this->retweets_count,
+                'quotes_count' => $this->quotes_count,
+                'views_count' => $this->views_count,
+                'bookmarks_count' => $this->bookmarks_count,
+                'quote_id' => $this->quote !== null ? $this->quote_id : null,
+                'mentions' => json_encode($this->mentions),
+                'text' => $this->text,
+            ]);
 
-            if ($this->quote) {
-                if ($this->quote instanceof Tweet) $this->quote->save($cache);
-                $tweet->quote_id = $this->quote_id;
-            }
-
-            $tweet->mentions = json_encode($this->mentions);
-            $tweet->text = $this->text;
-            $tweet->save();
+            if ($this->quote instanceof Tweet) $this->quote->save($cache);
 
             // add to the cache so that we dont double add
-            $cache['tweets'][$tweet->id] = $tweet;
+            $cache['tweets'][$this->id] = $tweet;
 
             foreach ($this->media as $media) $media->save($cache);
 
